@@ -155,7 +155,7 @@ export default function HiddenGemsTable() {
         width: 180,
         sortable: true,
         filter: true,
-        cellStyle: { color: "#A0AECB", fontSize: "11px" },
+        cellStyle: { color: "#A0AECB", fontSize: "11px", fontFamily: "inherit" },
       },
       {
         headerName: "SECTOR",
@@ -163,7 +163,7 @@ export default function HiddenGemsTable() {
         width: 130,
         sortable: true,
         filter: true,
-        cellStyle: { color: "#6B7A99", fontSize: "11px" },
+        cellStyle: { color: "#6B7A99", fontSize: "11px", fontFamily: "inherit" },
       },
       {
         headerName: "STAGE",
