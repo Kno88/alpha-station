@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Import monospace font ────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ── Base reset ───────────────────────────────────────────────────────────── */
+html, body {
+  @apply bg-oxford text-text-primary font-sans;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Custom scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1C2333;
+}
+::-webkit-scrollbar-thumb {
+  background: #2D3A52;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0088FF;
+}
+
+/* ── AG Grid dark theme overrides ─────────────────────────────────────────── */
+.ag-theme-alpine-dark {
+  --ag-background-color: #242E42;
+  --ag-odd-row-background-color: #1C2333;
+  --ag-header-background-color: #2D3A52;
+  --ag-border-color: #2D3A52;
+  --ag-row-hover-color: rgba(0, 136, 255, 0.08);
+  --ag-selected-row-background-color: rgba(0, 136, 255, 0.15);
+  --ag-foreground-color: #E8EBF0;
+  --ag-header-foreground-color: #0088FF;
+  --ag-font-family: 'JetBrains Mono', monospace;
+  --ag-font-size: 12px;
+  --ag-cell-horizontal-padding: 12px;
+}
+
+/* ── Neon glow utilities ──────────────────────────────────────────────────── */
+@layer utilities {
+  .text-glow-green {
+    text-shadow: 0 0 8px rgba(0, 255, 135, 0.6);
+  }
+  .text-glow-blue {
+    text-shadow: 0 0 8px rgba(0, 136, 255, 0.6);
+  }
+  .border-glow-green {
+    box-shadow: 0 0 0 1px rgba(0, 255, 135, 0.4), 0 0 12px rgba(0, 255, 135, 0.15);
+  }
+  .border-glow-blue {
+    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.4), 0 0 12px rgba(0, 136, 255, 0.15);
+  }
+  .card {
+    @apply bg-card-bg border border-border rounded-xl shadow-card;
+  }
+  .card-header {
+    @apply text-electric-blue font-mono text-xs font-semibold uppercase tracking-widest;
+  }
+  .badge-stage2 {
+    @apply bg-neon-green/10 text-neon-green border border-neon-green/30 rounded px-2 py-0.5 text-xs font-mono font-semibold;
+  }
+  .badge-stage1 {
+    @apply bg-amber/10 text-amber border border-amber/30 rounded px-2 py-0.5 text-xs font-mono font-semibold;
+  }
+  .badge-stage4 {
+    @apply bg-danger/10 text-danger border border-danger/30 rounded px-2 py-0.5 text-xs font-mono font-semibold;
+  }
+  .badge-buy {
+    @apply bg-neon-green/10 text-neon-green border border-neon-green/30 rounded-full px-3 py-1 text-xs font-bold;
+  }
+  .badge-watch {
+    @apply bg-amber/10 text-amber border border-amber/30 rounded-full px-3 py-1 text-xs font-bold;
+  }
+  .badge-avoid {
+    @apply bg-danger/10 text-danger border border-danger/30 rounded-full px-3 py-1 text-xs font-bold;
+  }
+}
+
+/* ── Toast dark override ──────────────────────────────────────────────────── */
+.Toastify__toast {
+  background: #242E42 !important;
+  border: 1px solid #2D3A52 !important;
+  color: #E8EBF0 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 13px !important;
+}
+.Toastify__progress-bar--success {
+  background: #00FF87 !important;
+}
+.Toastify__progress-bar--warning {
+  background: #FFB800 !important;
+}
+.Toastify__progress-bar--error {
+  background: #FF4560 !important;
+}
