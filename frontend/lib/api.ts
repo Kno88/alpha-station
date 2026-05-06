@@ -75,7 +75,6 @@ export interface ConfluenceItem {
 export interface AlphaScore {
   total: number;
   stage_score: number;
-  gex_score: number;
   rvol_score: number;
   fundamental_score: number;
   technical_score: number;
@@ -86,7 +85,6 @@ export interface TickerValidation {
   ticker: string;
   timestamp: string;
   stage: StageResult;
-  gex: GEXResult;
   liquidity: LiquidityResult;
   fundamentals: FundamentalResult;
   confluence_checklist: ConfluenceItem[];
@@ -99,12 +97,11 @@ export interface BubbleDataPoint {
   ticker: string;
   company_name: string;
   revenue_growth: number;
-  gex_normalized: number;
+  market_cap_billions: number;
   rvol: number;
   stage: string;
   alpha_score: number;
   sector: string | null;
-  market_cap: number | null;
   stage2_alert: boolean;
 }
 

@@ -86,7 +86,6 @@ class ConfluenceItem(BaseModel):
 class AlphaScore(BaseModel):
     total: float = Field(..., ge=0.0, le=100.0)
     stage_score: float
-    gex_score: float
     rvol_score: float
     fundamental_score: float
     technical_score: float
@@ -97,25 +96,23 @@ class TickerValidation(BaseModel):
     ticker: str
     timestamp: str
     stage: StageResult
-    gex: GEXResult
     liquidity: LiquidityResult
     fundamentals: FundamentalResult
     confluence_checklist: list[ConfluenceItem]
     alpha_score: AlphaScore
     recommendation: str                # BUY_ZONE, WATCH, AVOID
-    key_levels: dict[str, float] = {}  # support, resistance, gex_flip
+    key_levels: dict[str, float] = {}  # support, resistance
 
 
 class BubbleDataPoint(BaseModel):
     ticker: str
     company_name: str
-    revenue_growth: float              # X axis
-    gex_normalized: float              # Y axis
+    revenue_growth: float              # X axis (%)
+    market_cap_billions: float         # Y axis (Billions USD)
     rvol: float                        # Bubble size
     stage: str
     alpha_score: float
     sector: Optional[str]
-    market_cap: Optional[float]
     stage2_alert: bool
 
 

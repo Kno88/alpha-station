@@ -60,7 +60,7 @@ export default function AlphaBubbleChart() {
         label: "Alpha Universe",
         data: data.map((d) => ({
           x: d.revenue_growth,
-          y: d.gex_normalized,
+          y: d.market_cap_billions,
           r: Math.max(6, Math.min(28, d.rvol * 5)),
         })),
         backgroundColor: data.map((d) => `${getColor(d)}22`),
@@ -100,7 +100,7 @@ export default function AlphaBubbleChart() {
               `  Alpha Score: ${d.alpha_score.toFixed(0)}/100`,
               `  Rev Growth: ${d.revenue_growth > 0 ? "+" : ""}${d.revenue_growth.toFixed(1)}%`,
               `  RVOL: ${d.rvol.toFixed(2)}x`,
-              `  Market Cap: ${fmtCap(d.market_cap)}`,
+              `  Market Cap: $${d.market_cap_billions.toFixed(1)}B`,
               d.stage2_alert ? "  🚀 STAGE 2 ALERT" : "",
             ].filter(Boolean);
           },
@@ -126,7 +126,7 @@ export default function AlphaBubbleChart() {
       y: {
         title: {
           display: true,
-          text: "Net GEX ($ Billions)",
+          text: "Market Cap ($ Billions)",
           color: "#6B7A99",
           font: { family: "'JetBrains Mono'", size: 11 },
         },
@@ -155,7 +155,7 @@ export default function AlphaBubbleChart() {
         <div>
           <span className="card-header">◈ ALPHA BUBBLE CHART</span>
           <p className="text-xs text-muted mt-0.5">
-            X: Revenue Growth · Y: Net GEX · Size: RVOL
+            X: Revenue Growth · Y: Market Cap · Size: RVOL
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -71,9 +71,8 @@ async def _validate_ticker(ticker: str) -> TickerValidation:
         raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found or no data available")
 
     # 2. Run all engines concurrently
-    stage_result, gex_result, fund_result = await asyncio.gather(
+    stage_result, fund_result = await asyncio.gather(
         asyncio.to_thread(_stage_analyzer.analyze, ticker, df),
-        _gex_engine.calculate(ticker, spot),
         _fundamentals_engine.fetch(ticker),
     )
 
@@ -81,7 +80,7 @@ async def _validate_ticker(ticker: str) -> TickerValidation:
 
     # 3. Score
     alpha_score, confluence = compute_alpha_score(
-        stage_result, gex_result, liquidity_result, fund_result
+        stage_result, liquidity_result, fund_result
     )
 
     recommendation = build_recommendation(alpha_score, stage_result)
@@ -92,8 +91,6 @@ async def _validate_ticker(ticker: str) -> TickerValidation:
         key_levels["ma50"] = stage_result.ma50
     if stage_result.ma200:
         key_levels["ma200"] = stage_result.ma200
-    if gex_result.gex_flip_level:
-        key_levels["gex_flip"] = gex_result.gex_flip_level
     if liquidity_result.vwap_anchored:
         key_levels["avwap"] = liquidity_result.vwap_anchored
 
@@ -101,7 +98,6 @@ async def _validate_ticker(ticker: str) -> TickerValidation:
         ticker=ticker,
         timestamp=datetime.now(timezone.utc).isoformat(),
         stage=stage_result,
-        gex=gex_result,
         liquidity=liquidity_result,
         fundamentals=fund_result,
         confluence_checklist=confluence,
@@ -169,21 +165,16 @@ async def get_bubble_data(
             try:
                 v = await asyncio.wait_for(_validate_ticker(t), timeout=30)
                 rev_growth = (v.fundamentals.revenue_growth_yoy or 0) * 100
-                gex_norm = (
-                    v.gex.gex_total / 1e9
-                    if v.gex.available and v.gex.gex_total
-                    else 0.0
-                )
+                market_cap_b = (v.fundamentals.market_cap or 0) / 1e9
                 return BubbleDataPoint(
                     ticker=t,
                     company_name=v.fundamentals.company_name,
                     revenue_growth=round(rev_growth, 1),
-                    gex_normalized=round(gex_norm, 3),
+                    market_cap_billions=round(market_cap_b, 2),
                     rvol=v.liquidity.rvol,
                     stage=v.stage.stage.value,
                     alpha_score=v.alpha_score.total,
                     sector=v.fundamentals.sector,
-                    market_cap=v.fundamentals.market_cap,
                     stage2_alert=v.liquidity.stage2_alert,
                 )
             except asyncio.TimeoutError:
@@ -240,20 +231,6 @@ async def get_alerts(
                     timestamp=v.timestamp,
                     data={"price": v.stage.price, "ma50": v.stage.ma50},
                 ))
-
-            # GEX flip
-            if v.gex.available and v.gex.gex_flip_level:
-                price = v.stage.price
-                flip = v.gex.gex_flip_level
-                if abs(price - flip) / flip < 0.02:  # Within 2% of flip level
-                    alerts.append(AlertEvent(
-                        ticker=t,
-                        alert_type="GEX_FLIP",
-                        message=f"{t} — Price near GEX flip level ${flip:.2f}",
-                        severity="MEDIUM",
-                        timestamp=v.timestamp,
-                        data={"price": price, "gex_flip": flip},
-                    ))
         except Exception as e:
             logger.warning(f"Alert scan error for {t}: {e}")
             continue
