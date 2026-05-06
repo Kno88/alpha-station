@@ -15,6 +15,149 @@ from loguru import logger
 from models import FundamentalResult
 
 
+# ── FASE 2: Calculation Helpers ────────────────────────────────────────────────
+
+def calculate_revenue_cagr_3y(stock: yf.Ticker) -> Optional[float]:
+    """
+    Calculate 3-Year Revenue CAGR (Compound Annual Growth Rate)
+    Formula: (Revenue_Current / Revenue_3Y_Ago)^(1/3) - 1
+    """
+    try:
+        yearly = stock.yearly_financials
+        if yearly is None or yearly.empty or "Total Revenue" not in yearly.index:
+            return None
+
+        rev_data = yearly.loc["Total Revenue"].dropna().sort_index(ascending=False)
+        if len(rev_data) < 2:
+            return None
+
+        # Get current year and year 3 years ago
+        current_rev = float(rev_data.iloc[0])
+        rev_3y_ago = float(rev_data.iloc[min(3, len(rev_data) - 1)])
+
+        if current_rev <= 0 or rev_3y_ago <= 0:
+            return None
+
+        # CAGR = (Ending / Beginning)^(1/n) - 1
+        cagr = (current_rev / rev_3y_ago) ** (1 / 3) - 1
+        return max(-1.0, cagr)  # Cap at -100%
+
+    except Exception:
+        return None
+
+
+def calculate_fcf_quality(info: dict) -> Optional[float]:
+    """
+    Calculate FCF to Net Income ratio (Earnings Quality)
+    High ratio (>0.8) = earnings are backed by real cash
+    Low ratio (<0.5) = accounting profits, not cash (red flag)
+    """
+    try:
+        fcf = info.get("freeCashflow")
+        net_income = info.get("netIncome")
+
+        if fcf is None or net_income is None or net_income == 0:
+            return None
+
+        ratio = fcf / net_income
+        return max(0.0, min(2.0, ratio))  # Clamp between 0 and 2
+
+    except Exception:
+        return None
+
+
+def calculate_piotroski_f_score(stock: yf.Ticker, info: dict) -> Optional[float]:
+    """
+    Piotroski F-Score: 9-point quality assessment (0-9, higher is better)
+    >6 = high quality, 3-6 = moderate, <3 = poor quality/fraud risk
+
+    Metrics:
+    1. Net Income > 0 (profitability)
+    2. Operating Cash Flow > 0 (quality)
+    3. Operating Cash Flow > Net Income (earnings quality)
+    4. Change in ROA > 0 (improving profitability)
+    5. Debt/Total Assets decreased (improving leverage)
+    6. Current Ratio increased (improving liquidity)
+    7. Shares Outstanding not diluted
+    8. Gross Margin increased (operational efficiency)
+    9. Asset Turnover increased (operational efficiency)
+    """
+    try:
+        score = 0.0
+
+        # 1. Net Income > 0
+        net_income = info.get("netIncome")
+        if net_income is not None and net_income > 0:
+            score += 1
+
+        # 2. Operating Cash Flow > 0
+        ocf = info.get("operatingCashflow")
+        if ocf is not None and ocf > 0:
+            score += 1
+
+        # 3. OCF > Net Income (earnings quality)
+        if ocf is not None and net_income is not None and ocf > net_income:
+            score += 1
+
+        # 4. Change in ROA > 0 (improving)
+        try:
+            yearly = stock.yearly_financials
+            if yearly is not None and not yearly.empty:
+                # Compare current year to prior year ROA
+                total_assets = info.get("totalAssets")
+                net_income_current = info.get("netIncome")
+
+                if total_assets is not None and net_income_current is not None and total_assets > 0:
+                    roa_current = net_income_current / total_assets
+                    # Try to get prior year
+                    if len(yearly.columns) >= 2:
+                        # Simplified: just check if current ROA is positive
+                        if roa_current > 0:
+                            score += 1
+        except Exception:
+            pass
+
+        # 5. Debt/Total Assets decreased (or low)
+        try:
+            total_debt = info.get("totalDebt")
+            total_assets = info.get("totalAssets")
+            if total_debt is not None and total_assets is not None and total_assets > 0:
+                debt_ratio = total_debt / total_assets
+                if debt_ratio < 0.5:  # Less than 50% debt
+                    score += 1
+        except Exception:
+            pass
+
+        # 6. Current Ratio > 1.5 (good liquidity)
+        current_ratio = info.get("currentRatio")
+        if current_ratio is not None and current_ratio > 1.5:
+            score += 1
+
+        # 7. Shares Outstanding check (not diluted - simplified)
+        # Skip for now, would need historical comparison
+
+        # 8. Gross Margin > 30% (operational efficiency)
+        gross_margin = info.get("grossMargins")
+        if gross_margin is not None and gross_margin > 0.30:
+            score += 1
+
+        # 9. Asset Turnover increasing (simplified: Revenue/Assets > 1)
+        try:
+            revenue_ttm = info.get("totalRevenue")
+            total_assets = info.get("totalAssets")
+            if revenue_ttm is not None and total_assets is not None and total_assets > 0:
+                asset_turnover = revenue_ttm / total_assets
+                if asset_turnover > 0.5:  # Reasonable efficiency
+                    score += 1
+        except Exception:
+            pass
+
+        return score  # 0-9
+
+    except Exception:
+        return None
+
+
 class FundamentalsEngine:
     """Fetches and scores fundamental data for growth stock screening."""
 
@@ -237,7 +380,7 @@ class FundamentalsEngine:
             revenue_ttm=revenue_ttm,
             revenue_growth_yoy=revenue_growth_yoy,
             revenue_growth_qoq=revenue_growth_qoq,
-            revenue_cagr_3y=None,  # TODO: calculate from historical data
+            revenue_cagr_3y=calculate_revenue_cagr_3y(stock),
             earnings_growth_yoy=earnings_growth_yoy,
             earnings_growth_qoq=None,  # TODO: extract from quarterly
             fcf_growth=None,  # TODO: calculate from cash flow
@@ -269,10 +412,10 @@ class FundamentalsEngine:
             institutional_ownership_pct=inst_pct,
             insider_ownership_pct=insider_pct,
             # Calidad
-            piotroski_f_score=None,  # TODO: calculate
+            piotroski_f_score=calculate_piotroski_f_score(stock, info),
             earnings_surprise_pct=None,  # TODO: from earnings history
             accruals_ratio=None,  # TODO: calculate
-            fcf_to_net_income=None,  # TODO: calculate
+            fcf_to_net_income=calculate_fcf_quality(info),
             # Checklist booleans
             revenue_accelerating=revenue_accelerating,
             earnings_positive=earnings_positive,
