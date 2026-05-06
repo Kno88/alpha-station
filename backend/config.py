@@ -30,10 +30,10 @@ class Settings(BaseSettings):
 
     # ── Alpha Score weights (must sum to 1.0) ────────────────────────────────
     weight_stage: float = 0.25
-    weight_gex: float = 0.20
-    weight_rvol: float = 0.15
-    weight_fundamental: float = 0.25
-    weight_technical: float = 0.15
+    weight_gex: float = 0.05
+    weight_rvol: float = 0.17
+    weight_fundamental: float = 0.28
+    weight_technical: float = 0.25
 
     # ── PDF ─────────────────────────────────────────────────────────────────
     pdf_output_dir: str = "/tmp/alpha_reports"

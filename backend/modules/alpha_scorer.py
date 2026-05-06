@@ -33,16 +33,16 @@ def compute_alpha_score(
     # ── Stage Score (0-25) ────────────────────────────────────────────────────
     stage_raw = _score_stage(stage, checklist)
 
-    # ── GEX Score (0-20) ─────────────────────────────────────────────────────
+    # ── GEX Score (0-5) ──────────────────────────────────────────────────────
     gex_raw = _score_gex(gex, checklist)
 
-    # ── RVOL Score (0-15) ────────────────────────────────────────────────────
+    # ── RVOL Score (0-17) ────────────────────────────────────────────────────
     rvol_raw = _score_rvol(liquidity, checklist)
 
-    # ── Fundamental Score (0-25) ──────────────────────────────────────────────
+    # ── Fundamental Score (0-28) ──────────────────────────────────────────────
     fund_raw = _score_fundamentals(fundamentals, checklist)
 
-    # ── Technical Score (0-15) ────────────────────────────────────────────────
+    # ── Technical Score (0-25) ────────────────────────────────────────────────
     tech_raw = _score_technical(stage, liquidity, checklist)
 
     total = stage_raw + gex_raw + rvol_raw + fund_raw + tech_raw
@@ -102,7 +102,7 @@ def _score_stage(stage: StageResult, checklist: list[ConfluenceItem]) -> float:
 
 
 def _score_gex(gex: GEXResult, checklist: list[ConfluenceItem]) -> float:
-    max_pts = 20.0
+    max_pts = 5.0
     pts = 0.0
 
     if not gex.available:
@@ -123,7 +123,7 @@ def _score_gex(gex: GEXResult, checklist: list[ConfluenceItem]) -> float:
         weight=2.0,
     ))
     if positive_gex:
-        pts += 10.0
+        pts += 2.5
 
     # Put/call ratio < 1 = more call activity = bullish
     bullish_pcr = gex.put_call_ratio is not None and gex.put_call_ratio < 0.8
@@ -134,13 +134,13 @@ def _score_gex(gex: GEXResult, checklist: list[ConfluenceItem]) -> float:
         weight=1.0,
     ))
     if bullish_pcr:
-        pts += 10.0
+        pts += 2.5
 
     return min(max_pts, pts)
 
 
 def _score_rvol(liquidity: LiquidityResult, checklist: list[ConfluenceItem]) -> float:
-    max_pts = 15.0
+    max_pts = 17.0
     rvol = liquidity.rvol
 
     checklist.append(ConfluenceItem(
@@ -156,7 +156,7 @@ def _score_rvol(liquidity: LiquidityResult, checklist: list[ConfluenceItem]) -> 
 
 
 def _score_fundamentals(fundamentals: FundamentalResult, checklist: list[ConfluenceItem]) -> float:
-    max_pts = 25.0
+    max_pts = 28.0
     pts = 0.0
 
     checklist.append(ConfluenceItem(
@@ -166,9 +166,9 @@ def _score_fundamentals(fundamentals: FundamentalResult, checklist: list[Conflue
         weight=3.0,
     ))
     if fundamentals.high_growth:
-        pts += 10.0
+        pts += 11.0
     elif fundamentals.revenue_growth_yoy and fundamentals.revenue_growth_yoy > 0:
-        pts += 4.0
+        pts += 5.0
 
     checklist.append(ConfluenceItem(
         name="Revenue Accelerating QoQ",
@@ -177,7 +177,7 @@ def _score_fundamentals(fundamentals: FundamentalResult, checklist: list[Conflue
         weight=2.0,
     ))
     if fundamentals.revenue_accelerating:
-        pts += 7.0
+        pts += 8.0
 
     checklist.append(ConfluenceItem(
         name="Positive Earnings / Net Margin",
@@ -186,7 +186,7 @@ def _score_fundamentals(fundamentals: FundamentalResult, checklist: list[Conflue
         weight=1.5,
     ))
     if fundamentals.earnings_positive:
-        pts += 5.0
+        pts += 6.0
 
     checklist.append(ConfluenceItem(
         name="Hidden Gem — Low Institutional Coverage (< 40%)",
@@ -203,7 +203,7 @@ def _score_fundamentals(fundamentals: FundamentalResult, checklist: list[Conflue
 def _score_technical(
     stage: StageResult, liquidity: LiquidityResult, checklist: list[ConfluenceItem]
 ) -> float:
-    max_pts = 15.0
+    max_pts = 25.0
     pts = 0.0
 
     # Stage 1→2 transition signal
@@ -214,7 +214,7 @@ def _score_technical(
         weight=2.5,
     ))
     if stage.transitioning_to_2:
-        pts += 8.0
+        pts += 13.0
 
     # Price extended less than 20% above MA200 (healthy, not overextended)
     healthy_extension = 0 <= stage.price_vs_ma200_pct <= 20
@@ -225,9 +225,9 @@ def _score_technical(
         weight=1.0,
     ))
     if healthy_extension:
-        pts += 7.0
+        pts += 12.0
     elif 0 <= stage.price_vs_ma200_pct <= 35:
-        pts += 3.0
+        pts += 5.0
 
     return min(max_pts, pts)
 
