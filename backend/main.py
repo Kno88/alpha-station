@@ -26,7 +26,7 @@ from models import (
 from modules.alpha_scorer import build_recommendation, compute_alpha_score
 from modules.data_fetcher import get_daily_ohlcv, get_spot_price
 from modules.fundamentals import FundamentalsEngine
-from modules.gex_engine import GEXEngine, LiquidityEngine
+from modules.gex_engine import LiquidityEngine
 from modules.pdf_generator import generate_report
 from modules.stage_analysis import StageAnalyzer
 
@@ -50,7 +50,6 @@ app.add_middleware(
 _stage_analyzer = StageAnalyzer()
 _liquidity_engine = LiquidityEngine()
 _fundamentals_engine = FundamentalsEngine()
-_gex_engine = GEXEngine()
 
 
 # ── Core validation pipeline ──────────────────────────────────────────────────
@@ -118,7 +117,7 @@ async def health():
 async def validate_ticker(ticker: str):
     """
     Full Alpha Station validation pipeline for a single ticker.
-    Returns stage analysis, GEX, RVOL, fundamentals, and Alpha Score.
+    Returns stage analysis, fundamentals, liquidity metrics, and Alpha Score.
     """
     return await _validate_ticker(ticker)
 
@@ -152,7 +151,7 @@ async def get_bubble_data(
     )
 ):
     """
-    Returns data for the Alpha Bubble Chart (Revenue Growth × GEX × RVOL).
+    Returns data for the Alpha Bubble Chart (Revenue Growth × Market Cap × RVOL).
     """
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()][:12]
     if not ticker_list:
@@ -277,5 +276,4 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    await _gex_engine.close()
     logger.info("Alpha Station v4.0 — Engine shutdown")

@@ -29,19 +29,6 @@ class StageResult(BaseModel):
     notes: list[str] = []
 
 
-class GEXResult(BaseModel):
-    ticker: str
-    gex_total: float                   # Net GEX in dollars
-    gex_call: float
-    gex_put: float
-    gex_flip_level: Optional[float]    # Price where GEX flips sign
-    dominant_strikes: list[float]      # Top 3 gamma walls
-    iv_rank: Optional[float]           # 0-100
-    put_call_ratio: Optional[float]
-    available: bool = True
-    error: Optional[str] = None
-
-
 class LiquidityResult(BaseModel):
     ticker: str
     rvol: float                        # Relative volume vs 20-day avg
@@ -118,7 +105,7 @@ class BubbleDataPoint(BaseModel):
 
 class AlertEvent(BaseModel):
     ticker: str
-    alert_type: str                    # "STAGE2_BREAKOUT", "RVOL_SPIKE", "GEX_FLIP"
+    alert_type: str                    # "STAGE2_BREAKOUT", "STAGE2_TRANSITION"
     message: str
     severity: str                      # "HIGH", "MEDIUM", "LOW"
     timestamp: str

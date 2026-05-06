@@ -1,7 +1,8 @@
 """
 Alpha Station v4.0 — Alpha Score Engine
 
-Aggregates stage, GEX, RVOL, and fundamental signals into a 0-100 score.
+Aggregates stage, fundamentals, RVOL, and technical signals into a 0-100 score.
+Focus: Fundamentals-driven analysis (45%), Stage Analysis (30%), Liquidity (15%), Technical (10%).
 """
 
 from __future__ import annotations

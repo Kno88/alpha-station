@@ -19,19 +19,6 @@ export interface StageResult {
   notes: string[];
 }
 
-export interface GEXResult {
-  ticker: string;
-  gex_total: number;
-  gex_call: number;
-  gex_put: number;
-  gex_flip_level: number | null;
-  dominant_strikes: number[];
-  iv_rank: number | null;
-  put_call_ratio: number | null;
-  available: boolean;
-  error?: string;
-}
-
 export interface LiquidityResult {
   ticker: string;
   rvol: number;
@@ -167,12 +154,6 @@ export function fmtCap(val: number | null | undefined): string {
   if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
   if (val >= 1e6) return `$${(val / 1e6).toFixed(0)}M`;
   return `$${val.toLocaleString()}`;
-}
-
-export function fmtGex(val: number): string {
-  if (Math.abs(val) >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
-  if (Math.abs(val) >= 1e6) return `${(val / 1e6).toFixed(1)}M`;
-  return val.toFixed(0);
 }
 
 export function stageColor(stage: string): string {
