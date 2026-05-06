@@ -21,6 +21,7 @@ from models import (
     AlphaScore,
     BubbleDataPoint,
     ConfluenceItem,
+    ScreenerFilters,
     TickerValidation,
 )
 from modules.alpha_scorer import build_recommendation, compute_alpha_score
@@ -264,6 +265,159 @@ async def get_hidden_gems(
     # Return all valid results sorted by alpha score (relax gem filter so table always shows data)
     valid = [r for r in results if isinstance(r, TickerValidation)]
     return sorted(valid, key=lambda g: g.alpha_score.total, reverse=True)
+
+
+@app.post("/api/v1/screener/advanced", response_model=list[TickerValidation])
+async def get_advanced_screener(
+    tickers: str = Query(
+        default="ASTS,IONQ,LUNR,RKLB,ACHR,JOBY,HLLY,AIOT,SMAR,BRZE,PLTR,NVDA,AXON,CELH,DUOL,MNDY",
+        description="Universe of tickers to screen",
+    ),
+    filters: ScreenerFilters = None,
+):
+    """
+    Advanced screener with comprehensive fundamental filters.
+    FASE 1: Valuación, Crecimiento, Rentabilidad, Balance Sheet, Liquidez
+    """
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()][:25]
+
+    if not ticker_list:
+        raise HTTPException(status_code=400, detail="No tickers provided")
+
+    # Default filters if none provided
+    if filters is None:
+        filters = ScreenerFilters()
+
+    sem = asyncio.Semaphore(4)
+
+    async def _safe(t: str):
+        async with sem:
+            try:
+                return await asyncio.wait_for(_validate_ticker(t), timeout=30)
+            except Exception as e:
+                logger.warning(f"Screener error for {t}: {e}")
+                return None
+
+    # Fetch all tickers
+    results = await asyncio.gather(*[_safe(t) for t in ticker_list])
+    valid = [r for r in results if isinstance(r, TickerValidation)]
+
+    # Apply filters
+    filtered = _apply_screener_filters(valid, filters)
+
+    # Sort by alpha score descending
+    return sorted(filtered, key=lambda x: x.alpha_score.total, reverse=True)
+
+
+def _apply_screener_filters(tickers: list[TickerValidation], filters: ScreenerFilters) -> list[TickerValidation]:
+    """Apply fundamental filters to ticker list"""
+
+    def passes_filter(t: TickerValidation) -> bool:
+        f = t.fundamentals
+
+        # ── Alpha Score ────────────────────────────────────────────────────
+        if filters.alpha_score_min is not None:
+            if t.alpha_score.total < filters.alpha_score_min:
+                return False
+
+        # ── Valuación ──────────────────────────────────────────────────────
+        if filters.pe_max is not None:
+            if f.pe_ratio is None or f.pe_ratio > filters.pe_max:
+                return False
+        if filters.pe_min is not None:
+            if f.pe_ratio is None or f.pe_ratio < filters.pe_min:
+                return False
+
+        if filters.ps_max is not None:
+            if f.ps_ratio is None or f.ps_ratio > filters.ps_max:
+                return False
+
+        if filters.peg_max is not None:
+            if f.peg_ratio is None or f.peg_ratio > filters.peg_max:
+                return False
+
+        if filters.ev_ebitda_max is not None:
+            if f.ev_to_ebitda is None or f.ev_to_ebitda > filters.ev_ebitda_max:
+                return False
+
+        # ── Crecimiento ────────────────────────────────────────────────────
+        if filters.revenue_growth_min is not None:
+            if f.revenue_growth_yoy is None or f.revenue_growth_yoy < filters.revenue_growth_min:
+                return False
+
+        if filters.earnings_growth_min is not None:
+            if f.earnings_growth_yoy is None or f.earnings_growth_yoy < filters.earnings_growth_min:
+                return False
+
+        # ── Rentabilidad ───────────────────────────────────────────────────
+        if filters.gross_margin_min is not None:
+            if f.gross_margin is None or f.gross_margin < filters.gross_margin_min:
+                return False
+
+        if filters.operating_margin_min is not None:
+            if f.operating_margin is None or f.operating_margin < filters.operating_margin_min:
+                return False
+
+        if filters.net_margin_min is not None:
+            if f.net_margin is None or f.net_margin < filters.net_margin_min:
+                return False
+
+        if filters.roe_min is not None:
+            if f.roe is None or f.roe < filters.roe_min:
+                return False
+
+        if filters.roa_min is not None:
+            if f.roa is None or f.roa < filters.roa_min:
+                return False
+
+        # ── Balance Sheet ──────────────────────────────────────────────────
+        if filters.debt_to_equity_max is not None:
+            if f.debt_to_equity is None or f.debt_to_equity > filters.debt_to_equity_max:
+                return False
+
+        if filters.current_ratio_min is not None:
+            if f.current_ratio is None or f.current_ratio < filters.current_ratio_min:
+                return False
+
+        if filters.quick_ratio_min is not None:
+            if f.quick_ratio is None or f.quick_ratio < filters.quick_ratio_min:
+                return False
+
+        # ── Liquidez ───────────────────────────────────────────────────────
+        if filters.market_cap_min is not None:
+            if f.market_cap is None or f.market_cap < filters.market_cap_min:
+                return False
+
+        if filters.market_cap_max is not None:
+            if f.market_cap is None or f.market_cap > filters.market_cap_max:
+                return False
+
+        if filters.short_interest_max is not None:
+            if f.short_float_pct is None or f.short_float_pct > filters.short_interest_max:
+                return False
+
+        # ── Institucional ──────────────────────────────────────────────────
+        if filters.institutional_ownership_min is not None:
+            if f.institutional_ownership_pct is None or f.institutional_ownership_pct < filters.institutional_ownership_min:
+                return False
+
+        if filters.institutional_ownership_max is not None:
+            if f.institutional_ownership_pct is None or f.institutional_ownership_pct > filters.institutional_ownership_max:
+                return False
+
+        # ── Calidad ────────────────────────────────────────────────────────
+        if filters.piotroski_f_score_min is not None:
+            if f.piotroski_f_score is None or f.piotroski_f_score < filters.piotroski_f_score_min:
+                return False
+
+        # ── Sectores ───────────────────────────────────────────────────────
+        if filters.sectors is not None and len(filters.sectors) > 0:
+            if f.sector not in filters.sectors:
+                return False
+
+        return True
+
+    return [t for t in tickers if passes_filter(t)]
 
 
 # ── Startup / Shutdown ─────────────────────────────────────────────────────────
