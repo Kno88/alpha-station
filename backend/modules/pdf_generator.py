@@ -1,19 +1,17 @@
 """
-Alpha Station v4.0 — PDF Report Generator
-
-Generates a professional institutional-grade PDF report using ReportLab.
-Design: Dark Mode Institutional palette (Oxford Grey + Neon Green + Electric Blue)
+Alpha Station v6.0 — PDF Report Generator
+Fundamental Analysis Only
 """
 
 from __future__ import annotations
 
 import io
 import os
+import numpy as np
+import matplotlib.pyplot as plt
 from datetime import datetime
 from typing import Optional
 
-import yfinance as yf
-import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4, letter
@@ -31,10 +29,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 from reportlab.graphics.shapes import Drawing, Rect, String, Line, PolyLine
-from reportlab.graphics.charts.lineplots import LinePlot
-from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics import renderPDF
-from reportlab.pdfgen import canvas as pdfcanvas
 
 from config import settings
 from models import TickerValidation
@@ -86,11 +81,9 @@ def generate_report(validation: TickerValidation) -> bytes:
     story = []
     story += _build_header(validation)
     story += _build_alpha_score_banner(validation)
-    story += _build_stage_section(validation)
+    story += _build_radar_section(validation)
     story += _build_confluence_checklist(validation)
-    story += _build_gex_section(validation)
     story += _build_fundamentals_section(validation)
-    story += _build_price_trend_chart(validation)
     story += _build_footer(validation)
 
     doc.build(story)
@@ -106,11 +99,11 @@ def _build_header(v: TickerValidation) -> list:
 
     elements = [
         Paragraph(
-            f'<font color="{ELECTRIC_BLUE.hexval()}">■</font> ALPHA STATION v4.0',
+            f'<font color="{ELECTRIC_BLUE.hexval()}">■</font> ALPHA STATION v6.0',
             s["brand"],
         ),
         Paragraph(
-            f'<font color="{WHITE.hexval()}">TECHNICAL INTELLIGENCE REPORT</font>',
+            f'<font color="{WHITE.hexval()}">FUNDAMENTAL INTELLIGENCE REPORT</font>',
             s["report_subtitle"],
         ),
         Spacer(1, 4 * mm),
@@ -155,7 +148,7 @@ def _build_alpha_score_banner(v: TickerValidation) -> list:
     filled_w = (score / 100) * bar_w
 
     score_color = NEON_GREEN if score >= 70 else ELECTRIC_BLUE if score >= 50 else RED
-    rec_color = NEON_GREEN if rec == "BUY_ZONE" else AMBER if rec == "WATCH" else RED
+    rec_color = NEON_GREEN if rec in ["STRONG_BUY", "BUY"] else AMBER if rec == "HOLD" else RED
 
     d = Drawing(bar_w, bar_h)
     d.add(Rect(0, 0, bar_w, bar_h, fillColor=BORDER, strokeColor=None))
@@ -177,21 +170,16 @@ def _build_alpha_score_banner(v: TickerValidation) -> list:
             f'<br/><font color="{MUTED.hexval()}" size="9">RECOMMENDATION</font>',
             s["center"],
         ),
-        Paragraph(
-            f'<font color="{WHITE.hexval()}" size="12"><b>{v.stage.stage.value}</b></font>'
-            f'<br/><font color="{MUTED.hexval()}" size="9">{v.stage.stage_weeks}w in stage</font>',
-            s["center"],
-        ),
     ]]
 
     elements = [
         Table(
             data,
-            colWidths=["30%", "20%", "25%", "25%"],
+            colWidths=["34%", "33%", "33%"],
             style=TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), CARD_BG),
                 ("BOX", (0, 0), (-1, -1), 1, BORDER),
-                ("LINEAFTER", (0, 0), (2, 0), 0.5, BORDER),
+                ("LINEAFTER", (0, 0), (1, 0), 0.5, BORDER),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ROWPADDING", (0, 0), (-1, -1), 10),
             ]),
@@ -201,72 +189,96 @@ def _build_alpha_score_banner(v: TickerValidation) -> list:
     return elements
 
 
-def _build_stage_section(v: TickerValidation) -> list:
+def _build_radar_section(v: TickerValidation) -> list:
     s = _styles()
-    stage = v.stage
-
-    stage_color = (
-        NEON_GREEN if stage.stage.value == "Stage 2"
-        else RED if stage.stage.value == "Stage 4"
-        else AMBER
-    )
-
-    ma_rows = [
-        ["Indicator", "Value", "Status"],
-        ["Price", f"${stage.price:.2f}", "—"],
-        ["MA 50", f"${stage.ma50:.2f}",
-         "✓" if stage.price > stage.ma50 else "✗"],
-        ["MA 150", f"${stage.ma150:.2f}" if stage.ma150 else "—",
-         "✓" if stage.price > stage.ma150 and stage.ma150 else "✗"],
-        ["MA 200", f"${stage.ma200:.2f}" if stage.ma200 else "—",
-         "✓" if stage.price > stage.ma200 and stage.ma200 else "✗"],
-        ["vs MA200", f"{stage.price_vs_ma200_pct:+.1f}%", "—"],
-        ["MA Alignment", "Yes" if stage.ma_alignment else "No",
-         "✓" if stage.ma_alignment else "✗"],
-    ]
-
-    elements = [
+    
+    # Data for fundamental radar
+    labels = np.array(['Growth', 'Profitability', 'Moat', 'Health'])
+    
+    # Map scores appropriately
+    # growth is /30, profit is /30, moat is /20, health is /20
+    # normalize each to 100 for the radar
+    stats = np.array([
+        (v.alpha_score.growth_score / 30.0) * 100,
+        (v.alpha_score.profitability_score / 30.0) * 100,
+        (v.alpha_score.moat_score / 20.0) * 100,
+        (v.alpha_score.health_score / 20.0) * 100
+    ])
+    
+    angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False)
+    stats = np.concatenate((stats, [stats[0]]))
+    angles = np.concatenate((angles, [angles[0]]))
+    
+    # Plotting
+    fig, ax = plt.subplots(figsize=(3, 3), subplot_kw=dict(polar=True))
+    fig.patch.set_facecolor('#1C2333')
+    ax.set_facecolor('#242E42')
+    
+    ax.plot(angles, stats, 'o-', linewidth=2, color='#00FF87')
+    ax.fill(angles, stats, alpha=0.25, color='#00FF87')
+    
+    ax.set_thetagrids(angles[:-1] * 180/np.pi, labels, color='#E8EBF0', fontsize=10, fontweight='bold')
+    
+    ax.set_rticks([20, 40, 60, 80, 100])
+    ax.set_yticklabels([])
+    ax.grid(color='#2D3A52', linestyle='--')
+    ax.spines['polar'].set_color('#2D3A52')
+    
+    plt.tight_layout()
+    
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150, facecolor=fig.get_facecolor(), bbox_inches='tight')
+    plt.close(fig)
+    buf.seek(0)
+    
+    img = Image(buf, width=2.5 * inch, height=2.5 * inch)
+    
+    table_data = [[
         Paragraph(
-            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ STAGE ANALYSIS</font>',
+            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ FUNDAMENTAL PROFILE</font>',
             s["section_title"],
-        ),
-        Spacer(1, 2 * mm),
+        ), ""
+    ], [
         Table(
-            ma_rows,
-            colWidths=["40%", "35%", "25%"],
+            [
+                ["Metric", "Score"],
+                ["Growth", f"{v.alpha_score.growth_score:.1f}/30"],
+                ["Profitability", f"{v.alpha_score.profitability_score:.1f}/30"],
+                ["Moat", f"{v.alpha_score.moat_score:.1f}/20"],
+                ["Health", f"{v.alpha_score.health_score:.1f}/20"],
+                ["Quality Rank", f"{v.alpha_score.quality_rank}/100"],
+                ["Value Rank", f"{v.alpha_score.value_rank}/100"]
+            ],
+            colWidths=[1.5*inch, 1*inch],
             style=TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), BORDER),
-                ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("TEXTCOLOR", (0, 0), (-1, 0), ELECTRIC_BLUE),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("TEXTCOLOR", (0, 1), (-1, -1), WHITE),
-                ("TEXTCOLOR", (2, 1), (2, -1), NEON_GREEN),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, OXFORD_GREY]),
                 ("GRID", (0, 0), (-1, -1), 0.25, BORDER),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ROWPADDING", (0, 0), (-1, -1), 5),
-            ]),
+                ("ROWPADDING", (0, 0), (-1, -1), 6),
+            ])
         ),
-        Spacer(1, 2 * mm),
-        Paragraph(
-            f'<font color="{stage_color.hexval()}"><b>● {stage.stage.value}</b></font>'
-            f'  <font color="{MUTED.hexval()}" size="8">Confidence: {stage.confidence * 100:.0f}%</font>',
-            s["normal"],
+        img
+    ]]
+    
+    return [
+        Table(
+            table_data,
+            colWidths=["50%", "50%"],
+            style=TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 1), (1, 1), "CENTER"),
+            ])
         ),
+        Spacer(1, 4 * mm)
     ]
-
-    if stage.notes:
-        for note in stage.notes[:4]:
-            elements.append(Paragraph(note, s["note"]))
-
-    elements.append(Spacer(1, 4 * mm))
-    return elements
 
 
 def _build_confluence_checklist(v: TickerValidation) -> list:
     s = _styles()
 
-    rows = [["Confluence Factor", "Value", "Result"]]
+    rows = [["Fundamental Factor", "Value", "Result"]]
     for item in v.confluence_checklist:
         status_color = NEON_GREEN if item.passed else RED
         status_text = "● PASS" if item.passed else "● FAIL"
@@ -284,7 +296,7 @@ def _build_confluence_checklist(v: TickerValidation) -> list:
 
     elements = [
         Paragraph(
-            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ CONFLUENCE CHECKLIST</font>'
+            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ FUNDAMENTAL CHECKLIST</font>'
             f'  <font color="{MUTED.hexval()}" size="9">{passed}/{total} factors confirmed</font>',
             s["section_title"],
         ),
@@ -302,65 +314,6 @@ def _build_confluence_checklist(v: TickerValidation) -> list:
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("ROWPADDING", (0, 0), (-1, -1), 5),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]),
-        ),
-        Spacer(1, 4 * mm),
-    ]
-    return elements
-
-
-def _build_gex_section(v: TickerValidation) -> list:
-    s = _styles()
-    gex = v.gex
-
-    if not gex.available:
-        return [
-            Paragraph(
-                f'<font color="{ELECTRIC_BLUE.hexval()}">◈ GEX SUMMARY</font>'
-                f'  <font color="{AMBER.hexval()}" size="8">ThetaData unavailable</font>',
-                s["section_title"],
-            ),
-            Spacer(1, 4 * mm),
-        ]
-
-    gex_color = NEON_GREEN if gex.gex_total >= 0 else RED
-    gex_label = "POSITIVE (dealer support)" if gex.gex_total >= 0 else "NEGATIVE (dealer selling)"
-
-    def fmt_gex(v: float) -> str:
-        return f"${v / 1e9:.2f}B" if abs(v) >= 1e9 else f"${v / 1e6:.1f}M"
-
-    rows = [
-        ["GEX Metric", "Value"],
-        ["Net GEX", fmt_gex(gex.gex_total)],
-        ["Call GEX", fmt_gex(gex.gex_call)],
-        ["Put GEX", fmt_gex(gex.gex_put)],
-        ["GEX Flip Level", f"${gex.gex_flip_level:.2f}" if gex.gex_flip_level else "—"],
-        ["Put/Call Ratio", f"{gex.put_call_ratio:.2f}" if gex.put_call_ratio else "—"],
-        ["IV Rank", f"{gex.iv_rank:.0f}" if gex.iv_rank else "—"],
-    ]
-
-    dominant = ", ".join(f"${s:.0f}" for s in gex.dominant_strikes[:3]) if gex.dominant_strikes else "—"
-    rows.append(["Gamma Walls", dominant])
-
-    elements = [
-        Paragraph(
-            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ GEX SUMMARY</font>'
-            f'  <font color="{gex_color.hexval()}" size="8">● {gex_label}</font>',
-            s["section_title"],
-        ),
-        Spacer(1, 2 * mm),
-        Table(
-            rows,
-            colWidths=["50%", "50%"],
-            style=TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), BORDER),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("TEXTCOLOR", (0, 0), (-1, 0), ELECTRIC_BLUE),
-                ("TEXTCOLOR", (0, 1), (-1, -1), WHITE),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, OXFORD_GREY]),
-                ("GRID", (0, 0), (-1, -1), 0.25, BORDER),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ROWPADDING", (0, 0), (-1, -1), 5),
             ]),
         ),
         Spacer(1, 4 * mm),
@@ -389,19 +342,22 @@ def _build_fundamentals_section(v: TickerValidation) -> list:
         ["Market Cap", fmt_cap(f.market_cap)],
         ["Revenue TTM", fmt_cap(f.revenue_ttm)],
         ["Revenue Growth (YoY)", pct(f.revenue_growth_yoy)],
-        ["Revenue Growth (QoQ)", pct(f.revenue_growth_qoq)],
         ["Earnings Growth (YoY)", pct(f.earnings_growth_yoy)],
-        ["Gross Margin", pct(f.gross_margin)],
-        ["Net Margin", pct(f.net_margin)],
         ["P/E Ratio", f"{f.pe_ratio:.1f}x" if f.pe_ratio else "—"],
-        ["P/S Ratio", f"{f.ps_ratio:.2f}x" if f.ps_ratio else "—"],
+        ["FCF Yield", pct(f.fcf_yield)],
+        ["Earnings Yield", pct(f.earnings_yield)],
+        ["Piotroski F-Score", f"{f.piotroski_f_score:.0f}/9" if f.piotroski_f_score is not None else "—"],
+        ["Altman Z-Score", f"{f.altman_z_score:.2f}" if f.altman_z_score is not None else "—"],
+        ["Debt to FCF", f"{f.debt_to_fcf:.2f}x" if f.debt_to_fcf is not None else "—"],
+        ["Capex to Revenue", pct(f.capex_to_revenue)],
         ["Institutional Ownership", pct(f.institutional_ownership_pct / 100) if f.institutional_ownership_pct else "—"],
-        ["Short Float %", pct(f.short_float_pct / 100) if f.short_float_pct else "—"],
+        ["Market Share", f"{f.market_share_pct:.1f}%" if f.market_share_pct is not None else "—"],
+        ["Economic Moat", f"{f.moat}" if f.moat else "—"],
     ]
 
     elements = [
         Paragraph(
-            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ FUNDAMENTAL ANALYSIS</font>',
+            f'<font color="{ELECTRIC_BLUE.hexval()}">◈ INSTITUTIONAL FUNDAMENTALS</font>',
             s["section_title"],
         ),
         Spacer(1, 2 * mm),
@@ -424,101 +380,13 @@ def _build_fundamentals_section(v: TickerValidation) -> list:
     return elements
 
 
-def _build_price_trend_chart(v: TickerValidation) -> list:
-    """Embed a simple closing price sparkline using ReportLab graphics."""
-    s = _styles()
-
-    try:
-        ticker = v.ticker
-        df = yf.download(ticker, period="6mo", progress=False, auto_adjust=True)
-        if df is None or df.empty:
-            return []
-
-        close = df["Close"].dropna().tolist()
-        if len(close) < 10:
-            return []
-
-        # Downsample to ~60 points for clean rendering
-        step = max(1, len(close) // 60)
-        prices = close[::step][-60:]
-        n = len(prices)
-
-        chart_w = 160 * mm
-        chart_h = 35 * mm
-        pad_l, pad_r, pad_t, pad_b = 8, 5, 5, 8
-
-        d = Drawing(chart_w, chart_h)
-
-        # Background
-        d.add(Rect(0, 0, chart_w, chart_h, fillColor=CARD_BG, strokeColor=BORDER, strokeWidth=0.5))
-
-        # Grid lines
-        p_min, p_max = min(prices), max(prices)
-        p_range = p_max - p_min or 1
-        for i in range(3):
-            y = pad_b + (i + 1) * (chart_h - pad_t - pad_b) / 4
-            d.add(Line(pad_l, y, chart_w - pad_r, y, strokeColor=BORDER, strokeWidth=0.3))
-
-        # Price line (gradient color: neon green if trending up)
-        def px(i):
-            return pad_l + i * (chart_w - pad_l - pad_r) / (n - 1)
-
-        def py(price):
-            return pad_b + (price - p_min) / p_range * (chart_h - pad_t - pad_b)
-
-        # Build polyline points
-        points = []
-        for i, price in enumerate(prices):
-            points.extend([px(i), py(price)])
-
-        trend_up = prices[-1] > prices[0]
-        line_color = NEON_GREEN if trend_up else RED
-
-        d.add(PolyLine(points, strokeColor=line_color, strokeWidth=1.5, fillColor=None))
-
-        # Current price label
-        last_price = prices[-1]
-        d.add(String(
-            chart_w - pad_r - 2,
-            py(last_price),
-            f"${last_price:.2f}",
-            fontName="Helvetica-Bold",
-            fontSize=7,
-            fillColor=line_color,
-            textAnchor="end",
-        ))
-
-        # X-axis label
-        d.add(String(
-            pad_l, 1,
-            "6 Month Price History",
-            fontName="Helvetica",
-            fontSize=6,
-            fillColor=MUTED,
-        ))
-
-        elements = [
-            Paragraph(
-                f'<font color="{ELECTRIC_BLUE.hexval()}">◈ PRICE TREND</font>',
-                s["section_title"],
-            ),
-            Spacer(1, 2 * mm),
-            d,
-            Spacer(1, 4 * mm),
-        ]
-        return elements
-
-    except Exception:
-        return []
-
-
 def _build_footer(v: TickerValidation) -> list:
     s = _styles()
     return [
         HRFlowable(width="100%", thickness=0.5, color=BORDER, spaceBefore=2 * mm),
         Paragraph(
             f'<font color="{MUTED.hexval()}" size="7">'
-            f"Alpha Station v4.0 · This report is for informational purposes only and does not constitute investment advice. "
+            f"Alpha Station v6.0 · This report is for informational purposes only and does not constitute investment advice. "
             f"Generated: {v.timestamp} · Ticker: {v.ticker}"
             f"</font>",
             s["footer"],

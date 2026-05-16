@@ -1,5 +1,5 @@
 """
-Alpha Station v4.0 — Stage Analysis Engine
+Alpha Station v5.0 — Stage Analysis Engine
 Implements Weinstein Stage Method with Minervini trend template refinements.
 
 Stage definitions:
@@ -7,6 +7,12 @@ Stage definitions:
   Stage 2: Advancing — price above all MAs, MAs aligned upward, expanding volume
   Stage 3: Topping — price stalling, MAs flattening/crossing
   Stage 4: Declining — price below all MAs, MAs declining
+
+v5.0 additions:
+  - VCP (Volatility Contraction Pattern) detection
+  - Base Count tracking (1st base = most powerful)
+  - Base Depth measurement (< 35% = healthy)
+  - 52-week high/low tracking
 """
 
 from __future__ import annotations
@@ -119,6 +125,16 @@ class StageAnalyzer:
         # ── Price vs MA200 % ─────────────────────────────────────────────────
         price_vs_ma200_pct = ((price - ma200_val) / ma200_val * 100) if has_ma200 else 0.0
 
+        # ── 52-week high/low (already computed in _classify_stage context) ────
+        lookback_52w = min(252, len(close))
+        high_52w_val = float(close.iloc[-lookback_52w:].max())
+        low_52w_val = float(close.iloc[-lookback_52w:].min())
+
+        # ── VCP & Base Analysis (v5.0) ──────────────────────────────────
+        vcp_detected, vcp_tightness = self._detect_vcp(close, volume)
+        base_count = self._count_bases(close, ma50)
+        base_depth = self._base_depth(close, lookback=60)
+
         return StageResult(
             stage=stage,
             confidence=round(confidence, 3),
@@ -131,6 +147,12 @@ class StageAnalyzer:
             price_above_all_mas=price_above_all,
             transitioning_to_2=transitioning,
             stage_weeks=stage_weeks,
+            vcp_detected=vcp_detected,
+            vcp_tightness=round(vcp_tightness, 3),
+            base_count=base_count,
+            base_depth_pct=round(base_depth, 2),
+            high_52w=round(high_52w_val, 2),
+            low_52w=round(low_52w_val, 2),
             notes=notes,
         )
 
@@ -278,5 +300,150 @@ class StageAnalyzer:
             price_above_all_mas=False,
             transitioning_to_2=False,
             stage_weeks=0,
+            vcp_detected=False,
+            vcp_tightness=0.0,
+            base_count=0,
+            base_depth_pct=0.0,
+            high_52w=0.0,
+            low_52w=0.0,
             notes=[f"Error: {reason}"],
         )
+
+    # ── VCP & Base Analysis (v5.0) ─────────────────────────────────────────────
+
+    def _detect_vcp(self, close: pd.Series, volume: pd.Series) -> tuple[bool, float]:
+        """
+        Volatility Contraction Pattern (Minervini's favorite setup).
+
+        VCP = Series of price contractions getting progressively tighter.
+        Example: -25%, then -15%, then -8%, then -4% → Breakout!
+
+        Returns (is_vcp, tightness_score).
+        tightness_score: 0-1, where 1 = perfect contraction pattern.
+        """
+        try:
+            if len(close) < 40:
+                return False, 0.0
+
+            # Look at last 60 days for VCP pattern
+            recent = close.iloc[-60:].values.astype(float)
+            recent_vol = volume.iloc[-60:].values.astype(float)
+
+            # Find local peaks and troughs
+            swings = []
+            window = 5
+            for i in range(window, len(recent) - window):
+                # Local high
+                if recent[i] == max(recent[i-window:i+window+1]):
+                    swings.append(("H", i, recent[i]))
+                # Local low
+                elif recent[i] == min(recent[i-window:i+window+1]):
+                    swings.append(("L", i, recent[i]))
+
+            if len(swings) < 4:
+                return False, 0.0
+
+            # Calculate successive contraction depths
+            contractions = []
+            for j in range(len(swings) - 1):
+                if swings[j][0] == "H" and swings[j+1][0] == "L":
+                    depth = (swings[j][2] - swings[j+1][2]) / swings[j][2]
+                    contractions.append(depth)
+
+            if len(contractions) < 2:
+                return False, 0.0
+
+            # VCP = each contraction is smaller than the previous
+            is_contracting = all(
+                contractions[i] > contractions[i+1]
+                for i in range(len(contractions) - 1)
+            )
+
+            # Volume should also be declining (dry-up)
+            vol_first_half = float(np.mean(recent_vol[:30]))
+            vol_second_half = float(np.mean(recent_vol[30:]))
+            vol_declining = vol_second_half < vol_first_half * 0.8
+
+            # Tightness = ratio of last contraction to first
+            if contractions[0] > 0:
+                tightness = 1.0 - (contractions[-1] / contractions[0])
+            else:
+                tightness = 0.0
+            tightness = max(0.0, min(1.0, tightness))
+
+            is_vcp = is_contracting and vol_declining and tightness > 0.3
+            return is_vcp, tightness
+
+        except Exception:
+            return False, 0.0
+
+    def _count_bases(self, close: pd.Series, ma50: pd.Series) -> int:
+        """
+        Count the number of bases formed during the current advance.
+
+        A base = Period where price pulls back to or below MA50, then recovers.
+        1st base breakout = Most powerful (highest success rate).
+        3rd+ base = Failure-prone (late stage).
+        """
+        try:
+            if len(close) < 50:
+                return 0
+
+            # Look at last 252 days
+            lookback = min(252, len(close))
+            c = close.iloc[-lookback:].values.astype(float)
+            m = ma50.iloc[-lookback:].dropna().values.astype(float)
+
+            if len(m) < 50:
+                return 0
+
+            # Align lengths
+            min_len = min(len(c), len(m))
+            c = c[-min_len:]
+            m = m[-min_len:]
+
+            # Count transitions: above MA50 → below MA50 → above MA50 = 1 base
+            above = c > m
+            bases = 0
+            was_above = above[0]
+            touched_below = False
+
+            for i in range(1, len(above)):
+                if was_above and not above[i]:
+                    touched_below = True
+                elif touched_below and above[i]:
+                    bases += 1
+                    touched_below = False
+                was_above = above[i]
+
+            return bases
+
+        except Exception:
+            return 0
+
+    def _base_depth(self, close: pd.Series, lookback: int = 60) -> float:
+        """
+        Calculate the depth of the current correction from the recent high.
+
+        < 15%: Very tight (bullish)
+        15-25%: Normal correction
+        25-35%: Deep but acceptable for growth stocks
+        > 35%: Too deep (red flag)
+        """
+        try:
+            if len(close) < 10:
+                return 0.0
+
+            period = min(lookback, len(close))
+            recent = close.iloc[-period:].astype(float)
+            high = float(recent.max())
+            current = float(recent.iloc[-1])
+
+            if high <= 0:
+                return 0.0
+
+            depth = (high - current) / high * 100
+            return max(0.0, depth)
+
+        except Exception:
+            return 0.0

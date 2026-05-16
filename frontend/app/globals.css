@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "ag-grid-community/styles/ag-grid.css";
+@import "ag-grid-community/styles/ag-theme-alpine.css";
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +8,7 @@
 
 /* ── Base reset ───────────────────────────────────────────────────────────── */
 html, body {
-  @apply bg-oxford text-text-primary font-sans;
+  @apply bg-background text-text-primary font-sans;
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -14,89 +16,83 @@ html, body {
 
 /* ── Custom scrollbar ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #1C2333;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2D3A52;
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #0088FF;
+  background: #3B82F6;
 }
 
 /* ── AG Grid dark theme overrides ─────────────────────────────────────────── */
 .ag-theme-alpine-dark {
-  --ag-background-color: #242E42;
-  --ag-odd-row-background-color: #1C2333;
-  --ag-header-background-color: #2D3A52;
-  --ag-border-color: #2D3A52;
-  --ag-row-hover-color: rgba(0, 136, 255, 0.08);
-  --ag-selected-row-background-color: rgba(0, 136, 255, 0.15);
-  --ag-foreground-color: #E8EBF0;
-  --ag-header-foreground-color: #0088FF;
+  --ag-background-color: transparent;
+  --ag-odd-row-background-color: rgba(255, 255, 255, 0.01);
+  --ag-header-background-color: rgba(0, 0, 0, 0.3);
+  --ag-border-color: rgba(255, 255, 255, 0.05);
+  --ag-row-hover-color: rgba(59, 130, 246, 0.1);
+  --ag-selected-row-background-color: rgba(59, 130, 246, 0.15);
+  --ag-foreground-color: #F8FAFC;
+  --ag-header-foreground-color: #94A3B8;
   --ag-font-family: 'JetBrains Mono', monospace;
-  --ag-font-size: 12px;
-  --ag-cell-horizontal-padding: 12px;
+  --ag-font-size: 11px;
+  --ag-cell-horizontal-padding: 16px;
 }
 
-/* ── Neon glow utilities ──────────────────────────────────────────────────── */
+.ag-header-cell-label {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
 @layer utilities {
+  .glass {
+    @apply bg-glass-gradient backdrop-blur-2xl border border-white/[0.08] shadow-card rounded-2xl shadow-glass;
+  }
+  
+  .glass-panel {
+    @apply bg-oxford-100/50 backdrop-blur-xl border border-white/[0.05] shadow-lg rounded-xl;
+  }
+  
   .text-glow-green {
-    text-shadow: 0 0 8px rgba(0, 255, 135, 0.6);
+    @apply animate-glow-green text-neon-green;
   }
+  
   .text-glow-blue {
-    text-shadow: 0 0 8px rgba(0, 136, 255, 0.6);
+    @apply animate-glow-blue text-electric-blue;
   }
-  .border-glow-green {
-    box-shadow: 0 0 0 1px rgba(0, 255, 135, 0.4), 0 0 12px rgba(0, 255, 135, 0.15);
-  }
-  .border-glow-blue {
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.4), 0 0 12px rgba(0, 136, 255, 0.15);
-  }
+
   .card {
-    @apply bg-card-bg border border-border rounded-xl shadow-card;
+    @apply bg-card-bg backdrop-blur-xl border border-white/[0.05] rounded-2xl shadow-card transition-all duration-300 hover:border-white/[0.1];
   }
+  
   .card-header {
-    @apply text-electric-blue font-mono text-xs font-semibold uppercase tracking-widest;
+    @apply text-electric-blue font-mono text-[11px] font-bold uppercase tracking-[0.2em] border-l-2 border-electric-blue pl-3 mb-4 flex items-center gap-2;
   }
-  .badge-stage2 {
-    @apply bg-neon-green/10 text-neon-green border border-neon-green/30 rounded px-2 py-0.5 text-xs font-mono font-semibold;
+
+  .btn-primary {
+    @apply relative overflow-hidden bg-gradient-to-r from-electric-blue to-electric-blue-dim text-white font-mono font-bold tracking-widest text-xs py-3 px-6 rounded-lg shadow-lg hover:shadow-electric-blue/30 transition-all active:scale-95 disabled:opacity-50;
   }
-  .badge-stage1 {
-    @apply bg-amber/10 text-amber border border-amber/30 rounded px-2 py-0.5 text-xs font-mono font-semibold;
-  }
-  .badge-stage4 {
-    @apply bg-danger/10 text-danger border border-danger/30 rounded px-2 py-0.5 text-xs font-mono font-semibold;
-  }
-  .badge-buy {
-    @apply bg-neon-green/10 text-neon-green border border-neon-green/30 rounded-full px-3 py-1 text-xs font-bold;
-  }
-  .badge-watch {
-    @apply bg-amber/10 text-amber border border-amber/30 rounded-full px-3 py-1 text-xs font-bold;
-  }
-  .badge-avoid {
-    @apply bg-danger/10 text-danger border border-danger/30 rounded-full px-3 py-1 text-xs font-bold;
+  
+  .btn-primary::after {
+    content: '';
+    @apply absolute inset-0 bg-shimmer-gradient animate-shimmer opacity-20;
   }
 }
 
 /* ── Toast dark override ──────────────────────────────────────────────────── */
 .Toastify__toast {
-  background: #242E42 !important;
-  border: 1px solid #2D3A52 !important;
-  color: #E8EBF0 !important;
+  background: #171717 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  backdrop-filter: blur(16px);
+  color: #F8FAFC !important;
   font-family: 'JetBrains Mono', monospace !important;
-  font-size: 13px !important;
-}
-.Toastify__progress-bar--success {
-  background: #00FF87 !important;
-}
-.Toastify__progress-bar--warning {
-  background: #FFB800 !important;
-}
-.Toastify__progress-bar--error {
-  background: #FF4560 !important;
+  font-size: 12px !important;
 }

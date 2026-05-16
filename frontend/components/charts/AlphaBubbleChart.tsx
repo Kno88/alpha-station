@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Chart as ChartJS,
   BubbleController,
@@ -13,7 +13,7 @@ import {
   type TooltipItem,
 } from "chart.js";
 import { Bubble } from "react-chartjs-2";
-import { api, BubbleDataPoint, stageColor, fmtCap } from "@/lib/api";
+import { api, BubbleDataPoint, fmtCap } from "@/lib/api";
 import { Loader2, RefreshCw, Info } from "lucide-react";
 
 ChartJS.register(BubbleController, LinearScale, PointElement, Tooltip, Legend, Title);
@@ -25,8 +25,9 @@ const UNIVERSE_PRESETS: Record<string, string> = {
 };
 
 function getColor(point: BubbleDataPoint): string {
-  if (point.stage2_alert) return "#00FF87";
-  return stageColor(point.stage);
+  if (point.moat === "Wide") return "#00FF87";
+  if (point.moat === "Narrow") return "#0088FF";
+  return "#6B7A99";
 }
 
 export default function AlphaBubbleChart() {
@@ -34,7 +35,6 @@ export default function AlphaBubbleChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [preset, setPreset] = useState("Growth Leaders");
-  const [hovered, setHovered] = useState<BubbleDataPoint | null>(null);
 
   const fetchData = async (tickers?: string) => {
     setLoading(true);
@@ -61,7 +61,7 @@ export default function AlphaBubbleChart() {
         data: data.map((d) => ({
           x: d.revenue_growth,
           y: d.market_cap_billions,
-          r: Math.max(6, Math.min(28, d.rvol * 5)),
+          r: Math.max(6, (d.alpha_score / 100) * 25),
         })),
         backgroundColor: data.map((d) => `${getColor(d)}22`),
         borderColor: data.map((d) => getColor(d)),
@@ -96,12 +96,10 @@ export default function AlphaBubbleChart() {
             const idx = item.dataIndex;
             const d = data[idx];
             return [
-              `  Stage: ${d.stage}`,
+              `  Moat: ${d.moat}`,
               `  Alpha Score: ${d.alpha_score.toFixed(0)}/100`,
               `  Rev Growth: ${d.revenue_growth > 0 ? "+" : ""}${d.revenue_growth.toFixed(1)}%`,
-              `  RVOL: ${d.rvol.toFixed(2)}x`,
               `  Market Cap: $${d.market_cap_billions.toFixed(1)}B`,
-              d.stage2_alert ? "  🚀 STAGE 2 ALERT" : "",
             ].filter(Boolean);
           },
         },
@@ -139,11 +137,9 @@ export default function AlphaBubbleChart() {
         border: { color: "#2D3A52" },
       },
     },
-    onHover: (_, elements) => {
-      if (elements.length > 0) {
-        setHovered(data[elements[0].index]);
-      } else {
-        setHovered(null);
+    onHover: (event, elements) => {
+      if (event.native?.target) {
+        (event.native.target as HTMLElement).style.cursor = elements.length > 0 ? "pointer" : "default";
       }
     },
   };
@@ -155,7 +151,7 @@ export default function AlphaBubbleChart() {
         <div>
           <span className="card-header">◈ ALPHA BUBBLE CHART</span>
           <p className="text-xs text-muted mt-0.5">
-            X: Revenue Growth · Y: Market Cap · Size: RVOL
+            X: Revenue Growth · Y: Market Cap · Size: Alpha Score
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -188,10 +184,9 @@ export default function AlphaBubbleChart() {
       {/* ── Legend ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 text-xs font-mono">
         {[
-          { color: "#00FF87", label: "Stage 2 / Alert" },
-          { color: "#FFB800", label: "Stage 1" },
-          { color: "#FF4560", label: "Stage 4" },
-          { color: "#6B7A99", label: "Unknown" },
+          { color: "#00FF87", label: "Wide Moat" },
+          { color: "#0088FF", label: "Narrow Moat" },
+          { color: "#6B7A99", label: "No Moat" },
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1.5">
             <span
@@ -203,7 +198,7 @@ export default function AlphaBubbleChart() {
         ))}
         <div className="flex items-center gap-1 text-muted ml-auto">
           <Info className="w-3 h-3" />
-          <span>Bubble size = RVOL</span>
+          <span>Bubble size = Alpha Score</span>
         </div>
       </div>
 
@@ -221,6 +216,11 @@ export default function AlphaBubbleChart() {
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-xs text-danger font-mono">{error}</p>
           </div>
+        ) : data.length === 0 && !loading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <span className="text-2xl opacity-20">📊</span>
+            <p className="text-xs text-muted font-mono">No analysis data for this universe.</p>
+          </div>
         ) : (
           <Bubble data={chartData} options={options} />
         )}
@@ -237,11 +237,11 @@ export default function AlphaBubbleChart() {
                 color: getColor(d),
                 borderColor: getColor(d) + "40",
                 background: getColor(d) + "0A",
-                boxShadow: d.stage2_alert ? `0 0 6px ${getColor(d)}40` : undefined,
+                boxShadow: d.moat === "Wide" ? `0 0 6px ${getColor(d)}40` : undefined,
               }}
             >
               {d.ticker}
-              {d.stage2_alert && " 🚀"}
+              {d.moat === "Wide" && " 🏰"}
             </span>
           ))}
         </div>
