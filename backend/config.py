@@ -48,11 +48,15 @@ class Settings(BaseSettings):
     pdf_output_dir: str = os.getenv("PDF_OUTPUT_DIR", os.path.join(os.path.dirname(__file__), "alpha_reports"))
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    # Allow overriding CORS origins via ALPHA_CORS_ORIGINS (comma separated)
-    cors_origins: list[str] = os.getenv(
+    # We use a string here and split it later to avoid Pydantic JSON parsing errors
+    cors_origins: str = os.getenv(
         "ALPHA_CORS_ORIGINS", 
         "http://localhost:3000,http://127.0.0.1:3000"
-    ).split(",")
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
     model_config = {"env_prefix": "ALPHA_"}
 
