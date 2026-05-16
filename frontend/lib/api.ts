@@ -2,7 +2,8 @@
  * Alpha Station v6.0 — Fundamental API Client
  */
 
-const BASE = "/api/v1";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+const BASE = BACKEND_URL ? `${BACKEND_URL}/api/v1` : "/api/v1";
 
 export interface FundamentalResult {
   ticker: string;
